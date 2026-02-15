@@ -1,0 +1,36 @@
+### GET ALL PRODUCTS
+GET http://localhost:5000/api/v1/products
+
+### GET ONE PRODUCT
+GET http://localhost:5000/api/v1/products/1
+
+### CREATE PRODUCT
+POST http://localhost:5000/api/v1/products
+Content-Type: application/json
+
+{
+  "title": "Book",
+  "description": "Nice book",
+  "price": 100,
+  "extra": "not allowed"
+}
+
+### UPDATE PRODUCT
+PUT http://localhost:5000/api/v1/products/1
+Content-Type: application/json
+
+{
+    "title": "book",
+    "price": 45
+}
+### DELETE PRODUCT
+DELETE http://localhost:5000/api/v1/products/1
+
+# ### CREATE PRODUCT BY EXPRESS
+# POST http://localhost:5000/api/v1/products/express
+# Content-Type: application/json
+
+# {
+#     "title": "book",
+#     "price": 45
+# }
