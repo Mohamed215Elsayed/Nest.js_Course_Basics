@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { ClassSerializerInterceptor, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import configuration from './config/configuration';
@@ -7,6 +7,9 @@ import { Product } from './products/entities/product.entity';
 import { ProductsModule } from './products/products.module';
 import { UsersModule } from './users/users.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { Review } from './reviews/entities/review.entity';
+import { User } from './users/entities/user.entity';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -32,7 +35,7 @@ import { ReviewsModule } from './reviews/reviews.module';
           autoLoadEntities: true,
           synchronize: nodeEnv !== 'production',
           logging: nodeEnv === 'development',
-          // entities: [Product]
+          entities: [Product,Review,User]
         };
       },
     }),
@@ -40,6 +43,13 @@ import { ReviewsModule } from './reviews/reviews.module';
     ProductsModule,
     UsersModule,
     ReviewsModule,
+  
+  ],
+  providers:[
+    {// to enable hide password Globaly
+      provide:APP_INTERCEPTOR,
+      useClass:ClassSerializerInterceptor
+    }
   ],
 })
 export class AppModule { }

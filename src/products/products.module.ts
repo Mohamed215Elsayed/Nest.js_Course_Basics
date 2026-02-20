@@ -3,12 +3,15 @@ import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
-// import { ReviewsModule } from 'src/reviews/reviews.module';
-// import { UsersModule } from 'src/users/users.module';
+
 @Module({
-    controllers: [ProductsController], 
+    controllers: [ProductsController],
     providers: [ProductsService],
-    // ,imports:[UsersModule]
-    imports:[TypeOrmModule.forFeature([Product])]
+
+    imports: [TypeOrmModule.forFeature([Product]), TypeOrmModule.forFeature([Product])]
 })
 export class ProductsModule { }
+
+// import { ReviewsModule } from 'src/reviews/reviews.module';
+// import { UsersModule } from 'src/users/users.module';
+// ,imports:[UsersModule]
