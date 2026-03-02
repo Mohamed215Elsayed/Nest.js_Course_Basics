@@ -10,7 +10,8 @@ import {
     Check,
     RelationId,
     OneToMany,
-    Unique
+    Unique,
+    DeleteDateColumn
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { User } from "../../users/entities/user.entity";
@@ -28,7 +29,7 @@ export class Review {
     @Column()
     comment: string;
 
-    @Index(['product', 'createdAt'])
+    @Index(['user', 'createdAt'])
     @ManyToOne(() => User, (user) => user.reviews, {
         onDelete: 'CASCADE',
         nullable: false,
@@ -51,4 +52,9 @@ export class Review {
     @UpdateDateColumn({ type: 'timestamptz', precision: 6, name: 'updated_at', })
     updatedAt: Date;
 
+    // ✅ Soft Delete Column
+    @DeleteDateColumn({ type: 'timestamptz', precision: 6, name: 'deleted_at', nullable: true })
+    deletedAt?: Date;
+
 }
+/*id- rating-comment-user-product-createdAt*/

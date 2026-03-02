@@ -2,133 +2,164 @@ import {
   Controller,
   Get,
   Post,
-  Put,
+  Patch,
   Delete,
   Param,
   Body,
-  ParseIntPipe
+  ParseIntPipe,
+  HttpCode,
+  HttpStatus,
+  Query,
+  // ParseFloatPipe
+  // UseGuards,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { Product } from './entities/product.entity';
+import { CurrentUser } from '../users/decorators/current-user.decorator';
+import { UserRole } from '../utils/enums/user-role.enum';
+import { Protected } from '../users/guards/protected.decorator';
+import { FilterProductsDto } from './dto/filter-products.dto';
+import { PaginatedResponse } from '../utils/interfaces/paginated-response.interface';
+// import { AuthGuard } from '../users/guards/auth.guard';
+// import { RolesGuard } from '../users/guards/roles.guard';
+// import { AdminOnly } from 'src/users/guards/AdminOnly.guard';
+// import { Roles } from '../users/decorators/roles.decorator';
 
 @Controller('api/v1/products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) { }//Dependency Injection
-  // private productsService = new ProductsService();
+  constructor(private readonly productsService: ProductsService) { }
+
+  /**
+   * GET /api/v1/products
+   * ----------------------------------------
+   * Retrieves a list of all products.
+   *
+   * Public endpoint.
+   */
+  // @Get()
+  // @HttpCode(HttpStatus.OK) // 200
+  // async findAll(
+  //   @Query('title') title?: string,
+  //   @Query('minPrice') minPrice?: number,
+  //   @Query('maxPrice') maxPrice?: number,
+  // ): Promise<Product[]> {
+
+  //   return this.productsService.findAll(
+  //     title,
+  //     minPrice ? Number(minPrice) : undefined,
+  //     maxPrice ? Number(maxPrice) : undefined,
+  //   );
+  // }
+
+  // @Get()
+  // @HttpCode(HttpStatus.OK)
+  // async findAll(
+  //   @Query('title') title?: string,
+  //   @Query('minPrice', ParseFloatPipe) minPrice?: number,
+  //   @Query('maxPrice', ParseFloatPipe) maxPrice?: number,
+  // ): Promise<Product[]> {
+
+  //   return this.productsService.findAll(title, minPrice, maxPrice);
+  // }
+  // @Get()
+  // @HttpCode(HttpStatus.OK)
+  // async findAll(@Query() filters: FilterProductsDto) {
+  //   return this.productsService.findAll(
+  //     filters.title,
+  //     filters.minPrice,
+  //     filters.maxPrice,
+  //   );
+  // }
 
   @Get()
-  async findAll() {
-    return this.productsService.findAll();
+  @HttpCode(HttpStatus.OK)
+  async findAll(
+    @Query() filters: FilterProductsDto,
+  ): Promise<PaginatedResponse<Product>> {
+    return this.productsService.findAll(filters);
   }
 
+
+  /**
+   * GET /api/v1/products/:id
+   * ----------------------------------------
+   * Retrieves a single product by its ID.
+   *
+   * Public endpoint.
+   *
+   * @param id Product ID
+   */
   @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
+  @HttpCode(HttpStatus.OK) // 200
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Product> {
     return this.productsService.findOne(id);
   }
 
+  /**
+   * POST /api/v1/products
+   * ----------------------------------------
+   * Creates a new product.
+   *
+   * 🔐 Access: Admin only
+   *
+   * @param dto CreateProductDto
+   * @param userId Extracted from JWT payload (sub)
+   */
   @Post()
-  async create(@Body() dto: CreateProductDto) {
-    return this.productsService.create(dto);
+  @HttpCode(HttpStatus.CREATED) // 201
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles(UserRole.ADMIN)
+  // @AdminOnly()
+  @Protected(UserRole.ADMIN)
+  async create(
+    @Body() dto: CreateProductDto,
+    @CurrentUser('sub') userId: number,
+  ): Promise<Product> {
+    return this.productsService.create(dto, userId);
   }
 
-  @Put(':id')
+  /**
+   * PATCH /api/v1/products/:id
+   * ----------------------------------------
+   * Updates an existing product.
+   *
+   * 🔐 Access: Admin only
+   *
+   * @param id Product ID
+   * @param dto UpdateProductDto
+   */
+  @Patch(':id')
+  @HttpCode(HttpStatus.OK) // 200
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles(UserRole.ADMIN)
+  // @AdminOnly()
+  @Protected(UserRole.ADMIN)
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateProductDto,
-  ) {
+  ): Promise<Product> {
     return this.productsService.update(id, dto);
   }
 
+  /**
+   * DELETE /api/v1/products/:id
+   * ----------------------------------------
+   * Deletes a product by ID.
+   *
+   * 🔐 Access: Admin only
+   *
+   * @param id Product ID
+   */
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
+  @HttpCode(HttpStatus.NO_CONTENT) // 204
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles(UserRole.ADMIN)
+  // @AdminOnly()
+  @Protected(UserRole.ADMIN)
+  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.productsService.remove(id);
   }
 }
-/*-------------------------------*/
-// import { Controller, Get, Param, ParseIntPipe, NotFoundException, Post, Body, Put, Delete,
-//   // ValidationPipe,
-//   //  Req, Res,Headers
-//    } from '@nestjs/common';
-// // import type { Request, Response } from 'express';//express request and response types
-// import { CreateProductDto } from './dto/create-product.dto';
-// import { UpdateProductDto } from './dto/update-product.dto';
 
-// @Controller('api/v1/products')
-// export class ProductsController {
-//   private products = [
-//     { id: 1, title: 'book', price: 45 },
-//     { id: 2, title: 'pen', price: 10 },
-//     { id: 3, title: 'bag', price: 200 },
-//     { id: 4, title: 'notebook', price: 10 },
-//   ];
-//   // ✅ GET ALL
-//   @Get()
-//   public getAllProducts() {
-//     return this.products;
-//   }
-//   // ✅ GET ONE
-//   @Get(':id')
-//   getProductById(@Param('id', ParseIntPipe) id: number) {
-//     const product = this.products.find((p) => p.id === id);
-//     if (!product) {
-//       throw new NotFoundException('Product not found');//NotFoundException(message,{status:HttpStatus.NOT_FOUND,response:null,headers:null,description:null})
-//     }
-//     return product;
-//   }
-//   // ✅ CREATE
-//   @Post()
-//   // createProduct(@Body( new ValidationPipe({ whitelist:true,forbidNonWhitelisted:true})) body: CreateProductDto) {
-//     createProduct(@Body( ) body: CreateProductDto) {
-//     console.log(body)
-//     const newProduct = {
-//       id: this.products.length + 1,
-//       title: body.title,
-//       price: body.price,
-//     };
-//     this.products.push(newProduct);
-//     return newProduct;
-//   }
-//   // // ✅ CREATE By express request and response
-//   // @Post("/express")
-//   // createProductByExpress(@Req() req: Request, @Res({ passthrough: true }) res: Response,@Headers("Authorization") authorization: string) {//passthrough:true means that the response will be passed through to the next middleware
-//   //   const newProduct = {
-//   //     id: this.products.length + 1,
-//   //     title: req.body.title,
-//   //     price: req.body.price,
-//   //   };
-//   //   this.products.push(newProduct);
-//   //   res.status(201).json(newProduct);
-//   //   // console.log(authorization);
-//   //   // res.cookie("product", newProduct.id, { httpOnly: true, secure: true, maxAge: 1000 * 60 * 60 * 24 * 30 });
-//   //   return newProduct;
-//   // }
-//   // ✅ UPDATE
-//   @Put(':id')
-//   updateProduct(
-//     @Param('id', ParseIntPipe) id: number,
-//     @Body( ) body: UpdateProductDto,
-//   ) {
-//     const product = this.products.find((p) => p.id === id);
-
-//     if (!product) {
-//       throw new NotFoundException('Product not found');
-//     }
-//     product.title = body.title ?? product.title;
-//     product.price = body.price ?? product.price;
-
-//     return product;
-//   }
-//   // ✅ DELETE
-//   @Delete(':id')
-//   deleteProduct(@Param('id', ParseIntPipe) id: number) {
-//     const index = this.products.findIndex((p) => p.id === id);
-
-//     if (index === -1) {
-//       throw new NotFoundException('Product not found');
-//     }
-
-//     const deleted = this.products.splice(index, 1);
-//     return { message: 'Deleted successfully', product: deleted[0] };
-//   }
-// }

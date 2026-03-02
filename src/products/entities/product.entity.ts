@@ -35,15 +35,19 @@ export class Product {
     @Column({ type: 'int', default: 0 })
     ratingsCount: number;
 
-    @OneToMany(() => Review, (review) => review.product)
+    @OneToMany(() => Review, (review) => review.product,
+        // {eager:true}
+    )
     reviews: Review[];
 
     @ManyToOne(() => User, (user) => user.products, {
         onDelete: 'CASCADE',
         nullable: false,
-      })
-      @JoinColumn({ name: 'user_id' })
-      user: User;
+        // eager:true
+    }
+    )
+    @JoinColumn({ name: 'user_id' })
+    user: User;
 
     @CreateDateColumn({ type: 'timestamptz', precision: 6, name: 'created_at', })
     createdAt: Date;

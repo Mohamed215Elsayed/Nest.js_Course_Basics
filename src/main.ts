@@ -4,9 +4,11 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import { DatabaseExceptionFilter } from './common/filters/database-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
-
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import * as express from 'express';
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   const configService = app.get(ConfigService);
   // 1️⃣ Security & Cross Origin
@@ -27,6 +29,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
+      stopAtFirstError: true,
     }),
   );
   /**
@@ -38,6 +41,9 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
   // 4️⃣ Global Exception Filter (بدل try/catch)
   app.useGlobalFilters(new DatabaseExceptionFilter());
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads',
+  });
 
   await app.listen(configService.get<number>('port') || 5000);
 }

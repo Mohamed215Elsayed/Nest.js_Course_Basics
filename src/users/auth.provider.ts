@@ -1,7 +1,12 @@
-import { Injectable, UnauthorizedException, InternalServerErrorException, ConflictException, Logger } from "@nestjs/common";
+import {
+    Injectable,
+    UnauthorizedException,
+    InternalServerErrorException,
+    ConflictException,
+    Logger,
+} from "@nestjs/common";
 import { UserResponseDto } from "./dto/register-response-user.dto";
 import { QueryFailedError, Repository } from "typeorm";
-import { UsersService } from "./users.service";
 import { InjectRepository } from "@nestjs/typeorm";
 import { JwtPayload } from "./interfaces/jwt-payload.interface";
 import { User } from "./entities/user.entity";
@@ -9,143 +14,159 @@ import { RegisterUserDto } from "./dto/register-user.dto";
 import { LoginUserDto } from "./dto/login-user.dto";
 import * as argon2 from 'argon2';
 import { JwtService } from "@nestjs/jwt";
+import { MailService } from "../mail/mail.service";
+import { randomBytes } from 'crypto';
+import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class AuthProvider {
-    private readonly logger: Logger = new Logger(UsersService.name);
+    private readonly logger = new Logger(AuthProvider.name);
+    
     constructor(
-        @InjectRepository(User)
-        private readonly userRepository: Repository<User>,
-        private jwtService:JwtService
-    ) { }
+        @InjectRepository(User) private readonly userRepository: Repository<User>,
+        private readonly jwtService: JwtService,
+        private readonly mailService: MailService,
+        private readonly config: ConfigService
+    ) {}
 
-    /**
- * Generates JWT access token for authenticated user
- */
+    /* Generates JWT access token for authenticated user */
     private async generateToken(user: User): Promise<string> {
         const payload: JwtPayload = {
             sub: user.id,
             email: user.email,
-            role: user.role,
+            role: user.role
         };
         return this.jwtService.signAsync(payload);
     }
 
     /**
      * Registers a new user in the system.
-     *
-     * Pseudo Flow:
-     * 1️⃣ Validate email uniqueness (application level check)
-     * 2️⃣ Create entity instance
-     * 3️⃣ Save to database
-     * 4️⃣ Handle unique constraint race condition
-     * 5️⃣ Return safe response DTO
      */
-    public async register(
-        registerDto: RegisterUserDto,
-    ): Promise<{ message: string; accessToken: string; user: UserResponseDto }> {
+    public async register(registerDto: RegisterUserDto): Promise<{
+        message: string;
+    }> {
         registerDto.email = registerDto.email.toLowerCase();
         const { email } = registerDto;
-
-        // 1️⃣ Pre-check (fast fail for better UX)
         const exists = await this.userRepository.exists({
-            where: { email },
+            where: { email }
         });
-
         if (exists) {
             this.logger.warn(`Register attempt with existing email: ${email}`);
             throw new ConflictException('Email already exists');
         }
-
         try {
-            // 2️⃣ Create entity instance
             const user = this.userRepository.create(registerDto);
+            const rawToken = randomBytes(32).toString('hex');
+            user.verificationToken = await argon2.hash(rawToken);
+            user.verificationTokenExpiresAt = new Date(Date.now() + 3600 * 1000); // 1 hr
 
-            // 3️⃣ Persist user
             const savedUser = await this.userRepository.save(user);
-            // 🔥 Logging success
+            const link = this.generateLink(savedUser.id, rawToken);
+            await this.mailService.sendVerifyEmailTemplate(savedUser, link);
+
             this.logger.log(`New user registered: ${savedUser.email}`);
-            // Generate token after successful registration
-            const accessToken = await this.generateToken(savedUser);
-            // 4️⃣ Return safe DTO
-            return {
-                message: 'User registered successfully',
-                accessToken,
-                user: new UserResponseDto(savedUser),
-            };
+            return { message: 'Please verify your email to activate your account' };
         } catch (error) {
-            /**
-             * 5️⃣ Handle race condition
-             * If two requests passed the exists() check simultaneously,
-             * the database unique constraint will throw error code 23505
-             */
-            if (
-                error instanceof QueryFailedError &&
-                (error as any).driverError?.code === '23505'
-            ) {
+            if (error instanceof QueryFailedError && (error as any).driverError?.code === '23505') {
                 this.logger.warn(`Race condition detected for email: ${email}`);
                 throw new ConflictException('Email already exists');
             }
-
-            // Unexpected error
-            this.logger.error(
-                `Unexpected error during registration for ${email}`,
-                error.stack,
-            );
-
-            throw new InternalServerErrorException(
-                'Something went wrong while registering user',
-            );
+            this.logger.error(`Unexpected error during registration for ${email}`, error.stack);
+            throw new InternalServerErrorException('Something went wrong while registering user');
         }
     }
-    public async login(
-        loginDto: LoginUserDto,
-    )
-        : Promise<{ message: string; accessToken: string; user: UserResponseDto }> {
+
+    public async login(loginDto: LoginUserDto): Promise<{
+        message: string;
+        accessToken?: string;
+        user?: UserResponseDto;
+    }> {
         loginDto.email = loginDto.email.toLowerCase();
         const { email, password } = loginDto;
+        
         try {
-            // 1️⃣ Find user + explicitly select password
             const user = await this.userRepository
                 .createQueryBuilder('user')
                 .addSelect('user.password')
-                .where('user.email = :email', { email })//:email-parameter placeholder;{ email:email } parameter binding to prevent sql injection
+                .addSelect('user.verificationToken')
+                .addSelect('user.verificationTokenExpiresAt')
+                .where('user.email = :email', { email })
                 .getOne();
-
+                
             if (!user) {
                 this.logger.warn(`Login attempt with non-existing email: ${email}`);
                 throw new UnauthorizedException('Invalid credentials');
             }
-            // 2️⃣ Compare password
-            // const isPasswordValid = await bcrypt.compare(password, user.password);
-            // مع argon2
+
             const isPasswordValid = await argon2.verify(user.password, password);
             if (!isPasswordValid) {
                 this.logger.warn(`Invalid password attempt for: ${email}`);
                 throw new UnauthorizedException('Invalid credentials');
             }
+
+            // ✅ التحقق من حالة الحساب
+            if (!user.isAccountVerified) {
+                // التحقق إذا كان التوكن لسه صالح
+                if (
+                    user.verificationTokenExpiresAt &&
+                    user.verificationToken &&
+                    user.verificationTokenExpiresAt.getTime() > Date.now()
+                ) {
+                    // التوكن لسه صالح - نبعت نفس الرابط
+                    const link = this.generateLink(user.id, user.verificationToken);
+                    await this.mailService.sendVerifyEmailTemplate(user, link);
+                    return { 
+                        message: 'Account not verified. A new verification email has been sent to your email address.' 
+                    };
+                }
+
+                // التوكن انتهى أو مش موجود - نعمل توكن جديد
+                const rawToken = randomBytes(32).toString('hex');
+                const hashedToken = await argon2.hash(rawToken);
+                
+                // تحديث التوكن وتاريخ الانتهاء
+                user.verificationToken = hashedToken;
+                user.verificationTokenExpiresAt = new Date(Date.now() + 3600 * 1000); // 1 hr
+                
+                await this.userRepository.save(user);
+                
+                // إرسال التوكن الجديد
+                const link = this.generateLink(user.id, rawToken);
+                await this.mailService.sendVerifyEmailTemplate(user, link);
+                
+                return { 
+                    message: 'Account not verified. A new verification link has been sent to your email address.' 
+                };
+            }
+
+            // ✅ حساب مُفعل - نكمل تسجيل دخول
             this.logger.log(`User logged in successfully: ${email}`);
-            // Generate token after successful registration
+            
+            // إرسال إشعار الدخول (في الخلفية)
+            this.mailService.sendLoginNotification(user).catch(err => {
+                this.logger.error(`Login email failed for ${user.email}`, err.stack);
+            });
+
             const accessToken = await this.generateToken(user);
-            // 3️⃣ Return safe DTO (never return entity directly)
+            
             return {
                 message: 'Login successful',
                 accessToken,
-                user: new UserResponseDto(user),
+                user: new UserResponseDto(user)
             };
-        }
-        catch (error) {
+            
+        } catch (error) {
             if (error instanceof UnauthorizedException) {
                 throw error;
             }
 
-            this.logger.error(
-                `Unexpected error during login for ${email}`,
-                error.stack,
-            );
-            throw new InternalServerErrorException(
-                'Something went wrong during login',
-            );
+            this.logger.error(`Unexpected error during login for ${email}`, error.stack);
+            throw new InternalServerErrorException('Something went wrong during login');
         }
     }
+    /*===============================*/
+    private generateLink(userId: number, verificationToken: string): string {
+        return `${this.config.getOrThrow("DOMAIN")}/api/v1/users/verify-email/${userId}/${verificationToken}`;
+    }
+    /*===============================*/
 }

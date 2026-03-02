@@ -31,4 +31,16 @@ export class UpdateProductDto {
   )
   @Min(0.01)
   price?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  averageRating?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 0 })
+  @Min(0)
+  ratingsCount?: number;
 }
